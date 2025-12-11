@@ -1,0 +1,177 @@
+@using StudentCharityHub.Models
+@using System.Security.Claims
+@inject Microsoft.AspNetCore.Identity.UserManager<ApplicationUser> UserManager
+@inject StudentCharityHub.Repositories.IUnitOfWork UnitOfWork
+@{
+    var userId = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    var user = await UserManager.FindByIdAsync(userId!);
+    var donations = await UnitOfWork.Donations.FindAsync(d => d.DonorId == userId && d.Status == "Completed");
+    var totalDonated = donations.Sum(d => d.Amount);
+    var sponsoredCount = donations.Select(d => d.StudentId).Distinct().Count();
+    var recentDonations = donations.OrderByDescending(d => d.CreatedAt).Take(5).ToList();
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 mb-1 fw-bold text-primary">
+                        <i class="bi bi-heart-fill me-2"></i>Donor Dashboard
+                    </h1>
+                    <p class="text-muted mb-0">Welcome back, @(user?.FirstName ?? "Donor")!</p>
+                </div>
+                <div>
+                    <a asp-controller="Account" asp-action="Manage" class="btn btn-outline-primary me-2">
+                        <i class="bi bi-gear me-1"></i>Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Total Donated</h6>
+                            <h3 class="mb-0">$@totalDonated.ToString("F2")</h3>
+                        </div>
+                        <i class="bi bi-cash-coin fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Sponsored Students</h6>
+                            <h3 class="mb-0">@sponsoredCount</h3>
+                        </div>
+                        <i class="bi bi-people-fill fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-info text-white">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">My Donations</h6>
+                            <h3 class="mb-0">@donations.Count()</h3>
+                        </div>
+                        <i class="bi bi-receipt fs-1 opacity-50"></i>
+                    </div>
+                    <a asp-controller="Donation" asp-action="MyDonations" class="btn btn-light btn-sm mt-auto">
+                        <i class="bi bi-arrow-right me-1"></i>View All
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-warning text-white">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Messages</h6>
+                            <h3 class="mb-0">Chat</h3>
+                        </div>
+                        <i class="bi bi-envelope-heart-fill fs-1 opacity-50"></i>
+                    </div>
+                    <a asp-controller="Messages" asp-action="Index" class="btn btn-light btn-sm mt-auto">
+                        <i class="bi bi-arrow-right me-1"></i>View Messages
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning-charge-fill text-warning me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a asp-controller="Student" asp-action="Index" class="btn btn-outline-primary text-start">
+                            <i class="bi bi-search me-2"></i>Browse Students
+                        </a>
+                        <a asp-controller="Donor" asp-action="MySponsoredStudents" class="btn btn-outline-success text-start">
+                            <i class="bi bi-people-fill me-2"></i>My Sponsored Students
+                        </a>
+                        <a asp-controller="Donation" asp-action="MyDonations" class="btn btn-outline-info text-start">
+                            <i class="bi bi-receipt me-2"></i>My Donations
+                        </a>
+                        <a asp-controller="Messages" asp-action="Index" class="btn btn-outline-warning text-start">
+                            <i class="bi bi-envelope-heart me-2"></i>View Messages
+                        </a>
+                        <a asp-controller="Notifications" asp-action="Index" class="btn btn-outline-secondary text-start">
+                            <i class="bi bi-bell me-2"></i>View Notifications
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history text-info me-2"></i>Recent Donations
+                    </h5>
+                    <a asp-controller="Donation" asp-action="MyDonations" class="btn btn-sm btn-outline-primary">
+                        View All
+                    </a>
+                </div>
+                <div class="card-body">
+                    @if (recentDonations.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var donation in recentDonations)
+                            {
+                                <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong class="text-primary">$@donation.Amount.ToString("F2")</strong>
+                                        <small class="text-muted d-block">@donation.PaymentMethod - @donation.CreatedAt.ToString("MMM dd, yyyy")</small>
+                                    </div>
+                                    <a asp-controller="Student" asp-action="Details" asp-route-id="@donation.StudentId" class="btn btn-sm btn-outline-primary">
+                                        View Student
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0 text-center py-3">
+                            <i class="bi bi-inbox me-2"></i>No donations yet. Start making a difference!
+                        </p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #3494E6 0%, #EC6EAD 100%);
+    }
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+</style>
+

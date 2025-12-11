@@ -1,0 +1,66 @@
+@model IEnumerable<StudentCharityHub.Models.Donation>
+@{
+    ViewData["Title"] = "Manage Donations";
+}
+
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Donations</h1>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Donor</th>
+                            <th>Amount</th>
+                            <th>Method</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var donation in Model)
+                        {
+                            <tr>
+                                <td>@donation.Student?.FullName</td>
+                                <td>@donation.Donor?.Email</td>
+                                <td>$@donation.Amount.ToString("F2")</td>
+                                <td>@donation.PaymentMethod</td>
+                                <td>
+                                    <span class="badge @(donation.Status switch
+                                    {
+                                        "Completed" => "bg-success",
+                                        "Pending" => "bg-warning text-dark",
+                                        "Failed" => "bg-danger",
+                                        "Cancelled" => "bg-secondary",
+                                        _ => "bg-light text-dark"
+                                    })">@donation.Status</span>
+                                </td>
+                                <td>@donation.CreatedAt.ToString("yyyy-MM-dd")</td>
+                                <td class="text-end">
+                                    <a asp-controller="Donation" asp-action="Details" asp-route-id="@donation.Id"
+                                       class="btn btn-sm btn-outline-info">
+                                        <i class="bi bi-receipt"></i>
+                                    </a>
+                                    <form asp-controller="Donation" asp-action="Delete" asp-route-id="@donation.Id"
+                                          method="post" class="d-inline"
+                                          onsubmit="return confirm('Delete this donation record?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+

@@ -1,0 +1,229 @@
+@using StudentCharityHub.Models
+@{
+    var totalStudents = ViewBag.TotalStudents as int? ?? 0;
+    var totalDonations = ViewBag.TotalDonations as int? ?? 0;
+    var totalAmount = ViewBag.TotalAmount as decimal? ?? 0;
+    var totalUsers = ViewBag.TotalUsers as int? ?? 0;
+    var recentDonations = ViewBag.RecentDonations as List<Donation> ?? new List<Donation>();
+    var recentStudents = ViewBag.RecentStudents as List<Student> ?? new List<Student>();
+}
+
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 mb-1 fw-bold text-primary">
+                        <i class="bi bi-shield-check-fill me-2"></i>Admin Dashboard
+                    </h1>
+                    <p class="text-muted mb-0">Manage your platform and monitor activity</p>
+                </div>
+                <div>
+                    <a asp-controller="Account" asp-action="Manage" class="btn btn-outline-primary me-2">
+                        <i class="bi bi-gear me-1"></i>Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Total Students</h6>
+                            <h2 class="mb-0">@totalStudents</h2>
+                        </div>
+                        <i class="bi bi-mortarboard-fill fs-1 opacity-50"></i>
+                    </div>
+                    <a asp-action="Students" class="btn btn-light btn-sm">
+                        <i class="bi bi-arrow-right me-1"></i>Manage
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Total Donations</h6>
+                            <h2 class="mb-0">@totalDonations</h2>
+                        </div>
+                        <i class="bi bi-heart-fill fs-1 opacity-50"></i>
+                    </div>
+                    <a asp-action="Donations" class="btn btn-light btn-sm">
+                        <i class="bi bi-arrow-right me-1"></i>Manage
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Total Amount</h6>
+                            <h2 class="mb-0">$@totalAmount.ToString("F2")</h2>
+                        </div>
+                        <i class="bi bi-cash-coin fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 bg-gradient-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Total Users</h6>
+                            <h2 class="mb-0">@totalUsers</h2>
+                        </div>
+                        <i class="bi bi-people-fill fs-1 opacity-50"></i>
+                    </div>
+                    <a asp-action="Users" class="btn btn-light btn-sm">
+                        <i class="bi bi-arrow-right me-1"></i>Manage
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history text-primary me-2"></i>Recent Donations
+                    </h5>
+                    <a asp-action="Donations" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body">
+                    @if (recentDonations.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var donation in recentDonations.Take(5))
+                            {
+                                <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong class="text-success">$@donation.Amount.ToString("F2")</strong>
+                                        <small class="text-muted d-block">@donation.PaymentMethod - @donation.CreatedAt.ToString("MMM dd, yyyy")</small>
+                                    </div>
+                                    <span class="badge bg-@(donation.Status == "Completed" ? "success" : "warning")">@donation.Status</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0 text-center py-3">No donations yet.</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-mortarboard text-success me-2"></i>Recent Students
+                    </h5>
+                    <a asp-action="Students" class="btn btn-sm btn-outline-success">View All</a>
+                </div>
+                <div class="card-body">
+                    @if (recentStudents.Any())
+                    {
+                        <ul class="list-group list-group-flush">
+                            @foreach (var student in recentStudents)
+                            {
+                                <li class="list-group-item px-0">
+                                    <a asp-controller="Student" asp-action="Details" asp-route-id="@student.Id" class="text-decoration-none">
+                                        <strong>@student.FullName</strong>
+                                        <small class="text-muted d-block">@student.Location - @student.CreatedAt.ToString("MMM dd, yyyy")</small>
+                                    </a>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-0 text-center py-3">No students yet.</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning-charge-fill text-warning me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a asp-action="Students" class="btn btn-outline-primary w-100 text-start">
+                                <i class="bi bi-mortarboard me-2"></i>Manage Students
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-action="Donations" class="btn btn-outline-success w-100 text-start">
+                                <i class="bi bi-heart me-2"></i>Manage Donations
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-action="Users" class="btn btn-outline-info w-100 text-start">
+                                <i class="bi bi-people me-2"></i>Manage Users
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-controller="Reports" asp-action="Index" class="btn btn-outline-warning w-100 text-start">
+                                <i class="bi bi-file-earmark-text me-2"></i>Reports
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-controller="Student" asp-action="Create" class="btn btn-outline-primary w-100 text-start">
+                                <i class="bi bi-plus-circle me-2"></i>Add Student
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-action="AddUser" class="btn btn-outline-info w-100 text-start">
+                                <i class="bi bi-person-plus me-2"></i>Add User
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-controller="Messages" asp-action="Moderate" class="btn btn-outline-secondary w-100 text-start">
+                                <i class="bi bi-shield-check me-2"></i>Moderate Messages
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a asp-controller="Notifications" asp-action="Index" class="btn btn-outline-secondary w-100 text-start">
+                                <i class="bi bi-bell me-2"></i>View Notifications
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #3494E6 0%, #EC6EAD 100%);
+    }
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+</style>
+

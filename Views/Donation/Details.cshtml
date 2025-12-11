@@ -1,0 +1,55 @@
+@model StudentCharityHub.Models.Donation
+@{
+    ViewData["Title"] = "Donation Details";
+}
+
+<div class="container">
+    <h1 class="mb-4">Donation Details</h1>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-3">Student</dt>
+                <dd class="col-sm-9">@Model.Student?.FullName (@Model.StudentId)</dd>
+
+                <dt class="col-sm-3">Amount</dt>
+                <dd class="col-sm-9">$@Model.Amount.ToString("F2")</dd>
+
+                <dt class="col-sm-3">Payment Method</dt>
+                <dd class="col-sm-9">@Model.PaymentMethod</dd>
+
+                <dt class="col-sm-3">Status</dt>
+                <dd class="col-sm-9">
+                    <span class="badge @(Model.Status == "Completed" ? "bg-success" : Model.Status == "Pending" ? "bg-warning text-dark" : "bg-secondary")">
+                        @Model.Status
+                    </span>
+                </dd>
+
+                <dt class="col-sm-3">Transaction ID</dt>
+                <dd class="col-sm-9">@Model.TransactionId</dd>
+
+                <dt class="col-sm-3">Date</dt>
+                <dd class="col-sm-9">@Model.CreatedAt.ToString("MMM dd, yyyy HH:mm")</dd>
+
+                <dt class="col-sm-3">Receipt</dt>
+                <dd class="col-sm-9">
+                    @if (!string.IsNullOrEmpty(Model.ReceiptUrl))
+                    {
+                        <a href="@Model.ReceiptUrl" target="_blank" class="btn btn-sm btn-outline-primary">View Receipt</a>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Not generated</span>
+                    }
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        <a asp-controller="Student" asp-action="Details" asp-route-id="@Model.StudentId" class="btn btn-outline-primary">Back to Student</a>
+        <a asp-action="MyDonations" class="btn btn-primary">My Donations</a>
+    </div>
+</div>
+
+

@@ -1,0 +1,37 @@
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<StudentCharityHub.Models.ApplicationUser> UserManager
+@{
+    ViewData["Title"] = "Dashboard";
+    var user = await UserManager.GetUserAsync(User);
+    var roles = await UserManager.GetRolesAsync(user!);
+    var isAdmin = roles.Contains("Admin");
+    var isStudent = roles.Contains("Student");
+    var isDonor = roles.Contains("Donor");
+}
+
+@if (isAdmin)
+{
+    @await Html.PartialAsync("_AdminDashboard")
+}
+else if (isStudent)
+{
+    @await Html.PartialAsync("_StudentDashboard")
+}
+else if (isDonor)
+{
+    @await Html.PartialAsync("_DonorDashboard")
+}
+else
+{
+    <div class="container">
+        <div class="alert alert-info">
+            <h4>Welcome!</h4>
+            <p>Please wait while we redirect you to your dashboard...</p>
+        </div>
+    </div>
+    <script>
+        setTimeout(function() {
+            window.location.href = '@Url.Action("Index", "Home")';
+        }, 2000);
+    </script>
+}
