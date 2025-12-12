@@ -116,26 +116,21 @@ builder.Services.AddAuthentication(options =>
 });
 
 // Add CORS for React frontend
+// Add CORS for React frontend - allow local dev and production frontend URL
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactApp", policy =>
     {
-        var allowedOrigins = new List<string>
-        {
+        policy.WithOrigins(
             "http://localhost:5173",
-            "http://localhost:5174",
             "http://localhost:3000",
-            "https://localhost:5173",
-            "https://localhost:5174",
-            "https://localhost:3000"
-        }; 
-        
-        options.AddPolicy("AllowFrontend", policy =>
-        {
-            policy.WithOrigins("https://<frontend-service>.onrender.com")
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        });   
+            "https://charity-hub-frontend.onrender.com"  // production frontend
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials();
+    });
+});
 
         var configOrigins = builder.Configuration["AllowedOrigins"];
         if (!string.IsNullOrEmpty(configOrigins))
@@ -283,7 +278,7 @@ app.UseRouting();
 
 // Enable CORS
 app.UseCors("ReactApp");
-app.UseCors("AllowFrontend");
+
 
 app.UseAuthentication();
 app.UseAuthorization();
