@@ -245,6 +245,14 @@ else
     });
 }
 
+// Only use HTTPS redirection in Development (Vite proxy supports HTTPS)
+// Render provides HTTPS via reverse proxy
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
@@ -283,6 +291,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+app.MapGet("/", () => Results.Ok("Backend running"));
 app.Run();
 
 // ---------------- SEEDERS ----------------
