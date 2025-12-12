@@ -250,7 +250,6 @@ app.UseStaticFiles();
 
 app.UseRouting();
 app.UseCors("ReactApp");
-app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
