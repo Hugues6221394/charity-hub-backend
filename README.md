@@ -542,28 +542,3 @@ To all the students who shared their stories, the donors who believed in their p
 [![Documentation](https://img.shields.io/badge/Docs-Full%20Documentation-orange.svg)](https://docs.studentcharityhub.com)
 
 *"The light of knowledge should never be extinguished by financial darkness"*
-
-</div>
-#   S T U D E N T S _ D O N A T I O N S _ P L A T F O R M  
- #   c h a r i t y - h u b - b a c k e n d  
- g i t  
- i n i t  
- g i t  
- c o m m i t  
- - m  
- f i r s t   c o m m i t  
- g i t  
- b r a n c h  
- - M  
- m a i n  
- g i t  
- r e m o t e  
- a d d  
- o r i g i n  
- h t t p s : / / g i t h u b . c o m / H u g u e s 6 2 2 1 3 9 4 / c h a r i t y - h u b - b a c k e n d . g i t  
- g i t  
- p u s h  
- - u  
- o r i g i n  
- m a i n  
- 
