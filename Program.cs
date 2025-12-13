@@ -1,86 +1,106 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.StaticFiles;
-using StudentCharityHub.Data;
-using StudentCharityHub.Models;
+using Microsoft.IdentityModel.Tokens;
 using StudentCharityHub;
-using static StudentCharityHub.PermissionCatalogLocal;
-
+using StudentCharityHub.Data;
+using StudentCharityHub.Hubs;
+using StudentCharityHub.Models;
 using StudentCharityHub.Repositories;
 using StudentCharityHub.Services;
-using StudentCharityHub.Hubs;
+using static StudentCharityHub.PermissionCatalogLocal;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-var connectionString = Environment.GetEnvironmentVariable("DefaultConnection")
-                       ?? builder.Configuration.GetConnectionString("DefaultConnection")
-                       ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
+// ----------------------------------------------------
+// CONFIGURATION
+// ----------------------------------------------------
 builder.Configuration
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddEnvironmentVariables();
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+// ----------------------------------------------------
+// DATABASE (PostgreSQL on Render)
+// ----------------------------------------------------
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? builder.Configuration["DATABASE_URL"]
+    ?? throw new InvalidOperationException("Database connection string not found.");
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
-    options.Password.RequireDigit = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 8;
+    options.UseNpgsql(connectionString);
+});
 
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.AllowedForNewUsers = true;
+// ----------------------------------------------------
+// IDENTITY
+// ----------------------------------------------------
+builder.Services
+    .AddIdentity<ApplicationUser, IdentityRole>(options =>
+    {
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequiredLength = 8;
 
-    options.User.RequireUniqueEmail = true;
-    options.SignIn.RequireConfirmedEmail = false;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(5);
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.User.RequireUniqueEmail = true;
+        options.SignIn.RequireConfirmedEmail = false;
+    })
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
 
-    options.Tokens.AuthenticatorTokenProvider = TokenOptions.DefaultAuthenticatorProvider;
-})
-.AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
-
-// Authentication
+// ----------------------------------------------------
+// AUTHENTICATION (JWT + Cookies)
+// ----------------------------------------------------
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "JWT_OR_COOKIE";
     options.DefaultChallengeScheme = "JWT_OR_COOKIE";
 })
+.AddPolicyScheme("JWT_OR_COOKIE", "JWT or Cookie", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+        return authHeader?.StartsWith("Bearer ") == true ? "Bearer" : "Cookies";
+    };
+})
 .AddJwtBearer("Bearer", options =>
 {
-    var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-    var secretKey = jwtSettings["SecretKey"]
-        ?? throw new InvalidOperationException("JWT SecretKey not configured");
+    var jwt = builder.Configuration.GetSection("JwtSettings");
+    var secret = jwt["SecretKey"]
+        ?? throw new InvalidOperationException("JWT SecretKey missing");
 
-    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-            System.Text.Encoding.UTF8.GetBytes(secretKey)),
+        ValidIssuer = jwt["Issuer"],
+        ValidAudience = jwt["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
         ClockSkew = TimeSpan.Zero
     };
 
-    options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+    options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
+
             if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
             {
                 context.Token = accessToken;
             }
+
             return Task.CompletedTask;
         }
     };
@@ -88,214 +108,117 @@ builder.Services.AddAuthentication(options =>
 .AddCookie("Cookies")
 .AddGoogle(options =>
 {
-    var googleClientId = builder.Configuration["GoogleOAuth:ClientId"];
-    var googleClientSecret = builder.Configuration["GoogleOAuth:ClientSecret"];
-
-    if (!string.IsNullOrEmpty(googleClientId) && !string.IsNullOrEmpty(googleClientSecret))
-    {
-        options.ClientId = googleClientId;
-        options.ClientSecret = googleClientSecret;
-    }
-})
-.AddPolicyScheme("JWT_OR_COOKIE", "JWT or Cookie", options =>
-{
-    options.ForwardDefaultSelector = context =>
-    {
-        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
-        if (authHeader?.StartsWith("Bearer ") == true)
-            return "Bearer";
-        return "Cookies";
-    };
+    options.ClientId = builder.Configuration["GoogleOAuth:ClientId"]!;
+    options.ClientSecret = builder.Configuration["GoogleOAuth:ClientSecret"]!;
 });
 
-// ------------------------
-// FIXED: Correct CORS block
-// ------------------------
+// ----------------------------------------------------
+// CORS (React on Render)
+// ----------------------------------------------------
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ReactApp", policy =>
     {
-        var allowedOrigins = new List<string>
-        {
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://charity-hub-frontend.onrender.com"
-        };
-
-        var configOrigins = builder.Configuration["AllowedOrigins"];
-        if (!string.IsNullOrEmpty(configOrigins))
-        {
-            allowedOrigins.AddRange(
-                configOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries)
-            );
-        }
-
-        policy.WithOrigins(allowedOrigins.ToArray())
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://charity-hub-frontend.onrender.com"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
 });
 
-// Swagger
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-    {
-        Title = "Student Charity Hub API",
-        Version = "v1",
-        Description = "API for Student Charity Hub - connecting donors with students",
-        Contact = new Microsoft.OpenApi.Models.OpenApiContact
-        {
-            Name = "Student Charity Hub Team",
-            Email = "support@studentcharityhub.com"
-        }
-    });
-
-    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
-        {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-});
-
-// SignalR
-builder.Services.AddSignalR();
-
-// Repositories & services
+// ----------------------------------------------------
+// SERVICES
+// ----------------------------------------------------
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 
+builder.Services.AddSignalR();
 builder.Services.AddHttpClient();
+builder.Services.AddControllers();
 builder.Services.AddRazorPages();
-builder.Services.AddControllersWithViews();
 
-// Authorization policies
+// ----------------------------------------------------
+// AUTHORIZATION POLICIES
+// ----------------------------------------------------
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", p => p.RequireRole("Admin"));
-    options.AddPolicy("DonorOnly", p => p.RequireRole("Donor"));
-    options.AddPolicy("StudentOnly", p => p.RequireRole("Student"));
     options.AddPolicy("ManagerOnly", p => p.RequireRole("Manager"));
     options.AddPolicy("AdminOrManager", p => p.RequireRole("Admin", "Manager"));
-
-    options.AddPolicy("Permissions.Manage", p => p.RequireClaim("permission", PermissionsManagement.ManagePermissions));
-    options.AddPolicy("Permissions.Audit.View", p => p.RequireClaim("permission", PermissionsManagement.ViewAuditLog));
-
-    options.AddPolicy("Users.View", p => p.RequireClaim("permission", Users.View));
-    options.AddPolicy("Users.Manage", p => p.RequireClaim("permission", Users.Manage));
-
-    options.AddPolicy("Students.View", p => p.RequireClaim("permission", Students.View));
-    options.AddPolicy("Students.Manage", p => p.RequireClaim("permission", Students.Manage));
-
-    options.AddPolicy("Donations.Create", p => p.RequireClaim("permission", Donations.Create));
-    options.AddPolicy("Donations.View", p => p.RequireClaim("permission", Donations.View));
-    options.AddPolicy("Donations.Verify", p => p.RequireClaim("permission", Donations.Verify));
-
-    options.AddPolicy("Progress.View", p => p.RequireClaim("permission", Progress.View));
-    options.AddPolicy("Progress.Manage", p => p.RequireClaim("permission", Progress.Manage));
-
-    options.AddPolicy("Reports.View", p => p.RequireClaim("permission", Reports.View));
-    options.AddPolicy("Reports.Manage", p => p.RequireClaim("permission", Reports.Manage));
-
-    options.AddPolicy("Messages.View", p => p.RequireClaim("permission", Messages.View));
-    options.AddPolicy("Messages.Manage", p => p.RequireClaim("permission", Messages.Manage));
-
-    options.AddPolicy("Notifications.View", p => p.RequireClaim("permission", Notifications.View));
-    options.AddPolicy("Notifications.Manage", p => p.RequireClaim("permission", Notifications.Manage));
 });
 
+// ----------------------------------------------------
+// SWAGGER
+// ----------------------------------------------------
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// ----------------------------------------------------
+// BUILD APP
+// ----------------------------------------------------
 var app = builder.Build();
 
-// Pipeline
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Home/Error");
-    app.UseHsts();
-}
-else
+// ----------------------------------------------------
+// PIPELINE
+// ----------------------------------------------------
+if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
     app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Student Charity Hub API v1");
-        options.RoutePrefix = "swagger";
-    });
+    app.UseSwaggerUI();
+    app.UseHttpsRedirection(); // ONLY in dev
 }
-
-// Only use HTTPS redirection in Development (Vite proxy supports HTTPS)
-// Render provides HTTPS via reverse proxy
-if (app.Environment.IsDevelopment())
+else
 {
-    app.UseHttpsRedirection();
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts(); // Render handles HTTPS
 }
 
-
-app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
 app.UseCors("ReactApp");
-
 app.UseAuthentication();
 app.UseAuthorization();
 
+// ----------------------------------------------------
+// ENDPOINTS
+// ----------------------------------------------------
 app.MapControllers();
-
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.MapHub<MessageHub>("/hubs/messages");
+app.MapGet("/", () => Results.Ok("Backend running"));
 
-// Seeder
+// ----------------------------------------------------
+// DATABASE MIGRATION + SEEDING
+// ----------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    try
-    {
-        var context = services.GetRequiredService<ApplicationDbContext>();
-        var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
 
-        context.Database.EnsureCreated();
+    // ✅ CORRECT FOR POSTGRES + IDENTITY
+    context.Database.Migrate();
 
-        await SeedRolesAsync(roleManager);
-        await SeedAdminUserAsync(userManager);
-        await SeedPermissionClaimsAsync(userManager, roleManager);
-        await EnsureAdminHasAllPermissionsAsync(userManager);
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while seeding.");
-    }
+    await SeedRolesAsync(roleManager);
+    await SeedAdminUserAsync(userManager);
+    await SeedPermissionClaimsAsync(userManager, roleManager);
+    await EnsureAdminHasAllPermissionsAsync(userManager);
 }
 
-app.MapGet("/", () => Results.Ok("Backend running"));
 app.Run();
 
-// ---------------- SEEDERS ----------------
 
+// ====================================================
+// SEEDERS
+// ====================================================
 static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
 {
     string[] roles = { "Admin", "Donor", "Student", "Manager" };
@@ -303,91 +226,53 @@ static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
     foreach (var role in roles)
     {
         if (!await roleManager.RoleExistsAsync(role))
-        {
             await roleManager.CreateAsync(new IdentityRole(role));
-        }
     }
 }
 
 static async Task SeedAdminUserAsync(UserManager<ApplicationUser> userManager)
 {
-    var adminEmail = "admin@studentcharityhub.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
+    const string email = "admin@studentcharityhub.com";
+    const string password = "Admin@123";
 
-    if (adminUser == null)
+    var user = await userManager.FindByEmailAsync(email);
+    if (user != null) return;
+
+    user = new ApplicationUser
     {
-        adminUser = new ApplicationUser
-        {
-            UserName = adminEmail,
-            Email = adminEmail,
-            FirstName = "Admin",
-            LastName = "User",
-            EmailConfirmed = true,
-            CreatedAt = DateTime.UtcNow,
-            IsActive = true
-        };
-
-        var result = await userManager.CreateAsync(adminUser, "Admin@123");
-        if (result.Succeeded)
-        {
-            await userManager.AddToRoleAsync(adminUser, "Admin");
-        }
-    }
-}
-
-static async Task SeedPermissionClaimsAsync(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
-{
-    const string permissionClaimType = "permission";
-
-    var rolePermissions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Admin"] = AllPermissions.ToList(),
-        ["Manager"] = new List<string>
-        {
-            Users.View,
-            Students.View, Students.Manage,
-            Donations.View, Donations.Verify,
-            Progress.View,
-            Reports.View,
-            Messages.View, Messages.Manage,
-            Notifications.View, Notifications.Manage,
-        },
-        ["Donor"] = new List<string>
-        {
-            Donations.Create,
-            Donations.View,
-            Progress.View,
-            Notifications.View,
-            Messages.View,
-        },
-        ["Student"] = new List<string>
-        {
-            Students.View,
-            Progress.View, Progress.Manage,
-            Messages.View,
-            Notifications.View,
-        },
+        UserName = email,
+        Email = email,
+        EmailConfirmed = true,
+        FirstName = "Admin",
+        LastName = "User",
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow
     };
 
-    foreach (var kvp in rolePermissions)
+    var result = await userManager.CreateAsync(user, password);
+    if (result.Succeeded)
+        await userManager.AddToRoleAsync(user, "Admin");
+}
+
+static async Task SeedPermissionClaimsAsync(
+    UserManager<ApplicationUser> userManager,
+    RoleManager<IdentityRole> roleManager)
+{
+    const string type = "permission";
+
+    var adminRole = await roleManager.FindByNameAsync("Admin");
+    if (adminRole == null) return;
+
+    var users = await userManager.GetUsersInRoleAsync("Admin");
+    foreach (var user in users)
     {
-        var roleName = kvp.Key;
-        var permissions = kvp.Value;
-
-        if (!await roleManager.RoleExistsAsync(roleName))
-            continue;
-
-        var usersInRole = await userManager.GetUsersInRoleAsync(roleName);
-        foreach (var user in usersInRole)
+        var claims = await userManager.GetClaimsAsync(user);
+        foreach (var permission in AllPermissions)
         {
-            var existingClaims = await userManager.GetClaimsAsync(user);
-            foreach (var permission in permissions)
+            if (!claims.Any(c => c.Type == type && c.Value == permission))
             {
-                if (!existingClaims.Any(c => c.Type == permissionClaimType && c.Value == permission))
-                {
-                    await userManager.AddClaimAsync(user,
-                        new System.Security.Claims.Claim(permissionClaimType, permission));
-                }
+                await userManager.AddClaimAsync(user,
+                    new System.Security.Claims.Claim(type, permission));
             }
         }
     }
@@ -395,19 +280,19 @@ static async Task SeedPermissionClaimsAsync(UserManager<ApplicationUser> userMan
 
 static async Task EnsureAdminHasAllPermissionsAsync(UserManager<ApplicationUser> userManager)
 {
-    const string permissionClaimType = "permission";
-    var adminEmail = "admin@studentcharityhub.com";
-    var adminUser = await userManager.FindByEmailAsync(adminEmail);
-    if (adminUser == null) return;
+    const string email = "admin@studentcharityhub.com";
+    const string type = "permission";
 
-    var existingClaims = await userManager.GetClaimsAsync(adminUser);
+    var user = await userManager.FindByEmailAsync(email);
+    if (user == null) return;
 
+    var claims = await userManager.GetClaimsAsync(user);
     foreach (var permission in AllPermissions)
     {
-        if (!existingClaims.Any(c => c.Type == permissionClaimType && c.Value == permission))
+        if (!claims.Any(c => c.Type == type && c.Value == permission))
         {
-            await userManager.AddClaimAsync(adminUser,
-                new System.Security.Claims.Claim(permissionClaimType, permission));
+            await userManager.AddClaimAsync(user,
+                new System.Security.Claims.Claim(type, permission));
         }
     }
 }
