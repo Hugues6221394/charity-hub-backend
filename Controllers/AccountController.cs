@@ -86,54 +86,44 @@ namespace StudentCharityHub.Controllers
             ViewData["ReturnUrl"] = returnUrl;
             return View();
         }
+[HttpPost]
+[ValidateAntiForgeryToken]
+public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
+{
+    ViewData["ReturnUrl"] = returnUrl;
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
+    if (ModelState.IsValid)
+    {
+        var user = await _userManager.FindByEmailAsync(model.Email);
+        if (user == null)
         {
-            ViewData["ReturnUrl"] = returnUrl;
-
-            if (ModelState.IsValid)
-            {
-                var user = await _userManager.FindByEmailAsync(model.Email);
-                if (user != null && !user.IsActive)
-                {
-                    ModelState.AddModelError(string.Empty, "Your account has been deactivated.");
-                    return View(model);
-                }
-
-                var result = await _signInManager.PasswordSignInAsync(
-                    model.Email, model.Password, model.RememberMe, lockoutOnFailure: true);
-
-                if (result.Succeeded)
-                {
-                    _logger.LogInformation("User logged in.");
-
-                    // Check if 2FA is enabled
-                    if (await _userManager.GetTwoFactorEnabledAsync(user!))
-                    {
-                        return RedirectToAction("LoginWith2fa", new { ReturnUrl = returnUrl, RememberMe = model.RememberMe });
-                    }
-
-                    return RedirectToLocal(returnUrl);
-                }
-
-                if (result.RequiresTwoFactor)
-                {
-                    return RedirectToAction("LoginWith2fa", new { ReturnUrl = returnUrl, RememberMe = model.RememberMe });
-                }
-
-                if (result.IsLockedOut)
-                {
-                    _logger.LogWarning("User account locked out.");
-                    return RedirectToAction("Lockout");
-                }
-
-                ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-            }
-
+            ModelState.AddModelError(string.Empty, "Invalid login attempt.");
             return View(model);
         }
+
+        if (!user.IsActive)
+        {
+            ModelState.AddModelError(string.Empty, "Your account has been deactivated.");
+            return View(model);
+        }
+
+        var result = await _signInManager.PasswordSignInAsync(
+            user.UserName!,
+            model.Password,
+            model.RememberMe,
+            lockoutOnFailure: false
+        );
+
+        if (result.Succeeded)
+        {
+            return RedirectToLocal(returnUrl);
+        }
+
+        ModelState.AddModelError(string.Empty, "Invalid login attempt.");
+    }
+
+    return View(model);
+}
 
         [HttpGet]
         public async Task<IActionResult> LoginWith2fa(bool rememberMe, string? returnUrl = null)
